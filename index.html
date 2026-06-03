@@ -143,3 +143,131 @@
           correctCount = 0;
           secondsElapsed = 0;
           startTimer();
+          displayQuestion();
+        })
+        .catch(err => {
+          alert("データがとれませんでした。");
+          backToTitle();
+        });
+    }
+
+    function displayQuestion() {
+      document.getElementById('question-count').innerText = `せいかい ${correctCount} / 10`;
+      document.getElementById('word-display').innerText = questions[currentIdx];
+      document.getElementById('transcript').innerText = "";
+    }
+
+    function toggleSpeech() {
+      if (!recognition) return;
+      if (isRecording) {
+        recognition.stop();
+        stopRecording();
+      } else {
+        isRecording = true;
+        document.getElementById('mic-button').classList.add('recording');
+        document.getElementById('transcript').innerText = `🎙️ おはなししてね...`;
+        recognition.start();
+      }
+    }
+
+    function stopRecording() {
+      isRecording = false;
+      document.getElementById('mic-button').classList.remove('recording');
+      if (document.getElementById('transcript').innerText === `🎙️ おはなししてね...`) {
+        document.getElementById('transcript').innerText = "";
+      }
+    }
+
+    // ★パス（スキップ）処理
+    function skipQuestion() {
+      if (isRecording) {
+        recognition.stop();
+        stopRecording();
+      }
+      
+      // 次のストック問題へ移動（正解数は増やさない）
+      currentIdx++;
+      
+      // 万が一リストの最後までパスし続けたら、最初に戻す安全弁
+      if (currentIdx >= questions.length) {
+        currentIdx = 0;
+      }
+      
+      displayQuestion();
+    }
+
+    function toHiragana(str) {
+      return str.replace(/[\u30a1-\u30f6]/g, function(match) {
+        return String.fromCharCode(match.charCodeAt(0) - 0x60);
+      }).replace(/[\u4e00-\u9faf]/g, function(match) {
+        const kanjiMap = {
+          "店": "みせ", "犬": "いぬ", "猫": "ねこ", "鳥": "とり", "猿": "さる", "牛": "うし", "馬": "うま", "蟹": "かに",
+          "亀": "かめ", "蝦": "えび", "蛸": "たこ", "烏賊": "いか", "熊": "くま", "鹿": "しか", "栗": "くり", "柿": "かき",
+          "桃": "もも", "梨": "なし", "肉": "にく", "魚": "さかな", "卵": "たまご", "車": "くるま", "船": "ふね", "机": "つくえ",
+          "椅子": "いす", "本": "ほん", "傘": "かさ", "服": "ふく", "家": "いえ", "海": "うみ", "山": "やま", "川": "かわ",
+          "池": "いけ", "花": "はな", "草": "くさ", "木": "き", "葉": "は", "空": "そら", "雲": "くも", "雨": "あめ",
+          "雪": "ゆき", "風": "かぜ", "星": "ほし", "月": "つき", "太陽": "たいよう", "朝": "あさ", "昼": "ひる", "夜": "よる",
+          "青": "あお", "赤": "あか", "黄色": "きいろ", "緑": "みどり", "白": "しろ", "黒": "くろ", "手": "て", "足": "あし",
+          "目": "め", "口": "くち", "耳": "みみ", "鼻": "はな", "髪": "かみ", "指": "ゆび", "学校": "がっこう", "病院": "びょういん",
+          "公園": "こうえん", "駅": "えき", "風船": "ふうせん", "花火": "はなび", "祭り": "まつり", "太鼓": "たいこ", "歌": "うた",
+          "蜂": "はち", "蜘蛛": "くも", "蛙": "かえる", "金魚": "きんぎょ", "鯨": "くじら", "羊": "ひつじ", "豚": "ぶた",
+          "燕": "つばめ", "烏": "からす", "雀": "すずめ", "鳩": "はと", "蝉": "せみ", "向日葵": "ひまわり", "桜": "さくら", "梅": "うめ"
+        };
+        return kanjiMap[match] || match;
+      });
+    }
+
+    function checkAnswer(userAnswer) {
+      const target = toHiragana(questions[currentIdx].toString().trim());
+      const answer = toHiragana(userAnswer.toString().trim());
+
+      document.getElementById('transcript').innerText = `きこえたよ: ${userAnswer}`;
+
+      if (answer === target) {
+        playSound('correct');
+        correctCount++; // 正解数をプラス
+        
+        showEffect('⭕', () => {
+          if (correctCount < 10) {
+            currentIdx++;
+            if (currentIdx >= questions.length) currentIdx = 0;
+            displayQuestion();
+          } else {
+            endGame();
+          }
+        });
+      } else {
+        playSound('wrong');
+        showEffect('❌', () => {
+          document.getElementById('transcript').innerText = `ちがうかな？（きこえた音: ${userAnswer}）`;
+        });
+      }
+    }
+
+    function showEffect(symbol, callback) {
+      const effectDiv = document.getElementById('effect');
+      effectDiv.innerText = symbol;
+      effectDiv.style.color = (symbol === '⭕') ? '#4caf50' : '#f44336';
+      effectDiv.style.display = 'block';
+      setTimeout(() => { effectDiv.style.display = 'none'; callback(); }, 1000);
+    }
+
+    function startTimer() {
+      document.getElementById('timer').innerText = `0 びょう`;
+      timerInterval = setInterval(() => { secondsElapsed++; document.getElementById('timer').innerText = `${secondsElapsed} びょう`; }, 1000);
+    }
+    function stopTimer() { clearInterval(timerInterval); }
+    function endGame() {
+      stopTimer();
+      showPage('page-main', false);
+      document.getElementById('final-time').innerText = `かかったじかん: ${secondsElapsed} びょう`;
+      showPage('page-score', true);
+    }
+    function backToTitle() { showPage('page-score', false); showPage('page-main', false); showPage('page-title', true); }
+    function showPage(pageId, isShow) {
+      const page = document.getElementById(pageId);
+      if (isShow) page.classList.add('active'); else page.classList.remove('active');
+    }
+  </script>
+</body>
+</html>
