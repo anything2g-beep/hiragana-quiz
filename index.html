@@ -85,14 +85,15 @@
 
         recognition.onresult = (event) => {
           const resultText = event.results[0][0].transcript;
-          document.getElementById('transcript').innerText = `きこえたよ: ${resultText}`;
           checkAnswer(resultText);
         };
         recognition.onerror = (e) => {
           console.error("エラー:", e.error);
           stopRecording();
         };
-        recognition.onend = () => { stopRecording(); };
+        recognition.onend = () => { 
+          stopRecording(); 
+        };
       }
     } catch (e) { console.error(e); }
 
@@ -101,7 +102,6 @@
       document.getElementById('word-display').innerText = "よみこみちゅう...";
       showPage('page-main', true);
 
-      // 新しい通信方式（外部からGASを叩く）
       fetch(`${gasUrl}?difficulty=${difficulty}`)
         .then(res => res.json())
         .then(data => {
@@ -112,7 +112,7 @@
           displayQuestion();
         })
         .catch(err => {
-          alert("データがとれませんでした。GASのURLが正しいか確認してください。");
+          alert("データがとれませんでした。");
           backToTitle();
         });
     }
@@ -136,14 +136,44 @@
       }
     }
 
+    // 停止時は文字を綺麗に消す
     function stopRecording() {
       isRecording = false;
       document.getElementById('mic-button').classList.remove('recording');
+      if (document.getElementById('transcript').innerText === `🎙️ おはなししてね...`) {
+        document.getElementById('transcript').innerText = "";
+      }
+    }
+
+    // 漢字・カタカナをひらがなに強制変換する関数（お店→おみせ対策）
+    function toHiragana(str) {
+      return str.replace(/[\u30a1-\u30f6]/g, function(match) {
+        return String.fromCharCode(match.charCodeAt(0) - 0x60);
+      }).replace(/[\u4e00-\u9faf]/g, function(match) {
+        // 音声認識の一般的な漢字の読みをひらがなにする簡易マップ（代表的なもの）
+        const kanjiMap = {
+          "店": "みせ", "犬": "いぬ", "猫": "ねこ", "鳥": "とり", "猿": "さる", "牛": "うし", "馬": "うま", "蟹": "かに",
+          "亀": "かめ", "蝦": "えび", "蛸": "たこ", "烏賊": "いか", "熊": "くま", "鹿": "しか", "栗": "くり", "柿": "かき",
+          "桃": "もも", "梨": "なし", "肉": "にく", "魚": "さかな", "卵": "たまご", "車": "くるま", "船": "ふね", "机": "つくえ",
+          "椅子": "いす", "本": "ほん", "傘": "かさ", "服": "ふく", "家": "いえ", "海": "うみ", "山": "やま", "川": "かわ",
+          "池": "いけ", "花": "はな", "草": "くさ", "木": "き", "葉": "は", "空": "そら", "雲": "くも", "雨": "あめ",
+          "雪": "ゆき", "風": "かぜ", "星": "ほし", "月": "つき", "太陽": "たいよう", "朝": "あさ", "昼": "ひる", "夜": "よる",
+          "青": "あお", "赤": "あか", "黄色": "きいろ", "緑": "みどり", "白": "しろ", "黒": "くろ", "手": "て", "足": "あし",
+          "目": "め", "口": "くち", "耳": "みみ", "鼻": "はな", "髪": "かみ", "指": "ゆび", "学校": "がっこう", "病院": "びょういん",
+          "公園": "こうえん", "駅": "えき", "風船": "ふうせん", "花火": "はなび", "祭り": "まつり", "太鼓": "たいこ", "歌": "うた",
+          "蜂": "はち", "蜘蛛": "くも", "蛙": "かえる", "金魚": "きんぎょ", "鯨": "くじら", "羊": "ひつじ", "豚": "ぶた",
+          "燕": "つばめ", "烏": "からす", "雀": "すずめ", "鳩": "はと", "蝉": "せみ", "向日葵": "ひまわり", "桜": "さくら", "梅": "うめ"
+        };
+        return kanjiMap[match] || match;
+      });
     }
 
     function checkAnswer(userAnswer) {
-      const target = questions[currentIdx].toString().trim();
-      const answer = userAnswer.toString().trim();
+      // 問題と回答の両方をひらがなにして比較する
+      const target = toHiragana(questions[currentIdx].toString().trim());
+      const answer = toHiragana(userAnswer.toString().trim());
+
+      document.getElementById('transcript').innerText = `きこえたよ: ${userAnswer}`;
 
       if (answer === target) {
         showEffect('⭕', () => {
@@ -153,7 +183,7 @@
         });
       } else {
         showEffect('❌', () => {
-          document.getElementById('transcript').innerText = `ちがうかな？（きこえた音: ${answer}）`;
+          document.getElementById('transcript').innerText = `ちがうかな？（きこえた音: ${userAnswer}）`;
         });
       }
     }
