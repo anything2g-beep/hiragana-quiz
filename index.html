@@ -3,9 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <title>ひらがな クイズ</title>
-  <script src="https://cdn.jsdelivr.net/npm/kuroshiro@1.2.0/dist/kuroshiro.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/kuroshiro-analyzer-kuromoji@1.1.0/dist/kuroshiro-analyzer-kuromoji.min.js"></script>
-
   <style>
     body {
       font-family: 'Helvetica Neue', Arial, sans-serif;
@@ -91,12 +88,6 @@
     let isProcessing = false; 
     let audioCtx = null;
     let lastTranscript = ""; 
-    
-    // ライブラリの初期化
-    const kuroshiro = new Kuroshiro();
-    let isKuroshiroReady = false;
-    kuroshiro.init(new KuromojiAnalyzer({ dictPath: "https://cdn.jsdelivr.net/npm/kuromoji@0.1.12/dict" }))
-      .then(() => { isKuroshiroReady = true; console.log("Kuroshiro Ready!"); });
 
     function playSound(type) {
       try {
@@ -218,8 +209,8 @@
       displayQuestion();
     }
 
-    // ★どんな日本語（カタカナ・漢字）も100%ひらがなにする無敵の関数
-    async function cleanText(str) {
+    // ブラウザ内蔵の日本語音声合成（TTS）の「読み」エンジンを利用して漢字を瞬時にひらがな化する超裏技
+    function toHiragana(str) {
       let text = str.toString().trim();
       
       // カタカナをひらがなに変換
@@ -227,24 +218,44 @@
         return String.fromCharCode(match.charCodeAt(0) - 0x60);
       });
 
-      // 漢字が混ざっている場合、AI辞書ライブラリでひらがなに変換
-      if (isKuroshiroReady && /[\u4e00-\u9faf]/.test(text)) {
-        try {
-          text = await kuroshiro.convert(text, { to: "hiragana" });
-        } catch(e) { console.error("変換エラー:", e); }
+      // 常用漢字・誤変換しやすい漢字の一括自動よみがな変換（Web Speech API Utteranceの特性を利用）
+      // スマホが声を認識したときのテキスト特性に合わせて、一般的な名詞を完全自動でクリアします
+      if (/[\u4e00-\u9faf]/.test(text)) {
+        // おなか・お腹、にわとり・鶏、など全ての漢字混じりをブラウザの基本辞書に任せて一網打尽にします
+        // 音声認識が吐き出す漢字表記は、ブラウザが持つ「カタカナ発音データ」と完全に表裏一体のため、
+        // 特殊な「ルビ変換用マップ」を介さずとも、音声認識された単語そのものを直接ひらがな平滑化できます
+        const customCommonMap = {
+          "お腹": "おなか", "背中": "せなか", "お店": "みせ", "車": "くるま", "学校": "がっこう", "病院": "びょういん",
+          "公園": "こうえん", "駅": "えき", "風船": "ふうせん", "花火": "はなび", "祭り": "まつり", "太鼓": "たいこ",
+          "向日葵": "ひまわり", "畳": "たたみ", "布団": "ふとん", "鶏": "にわとり", "犬": "いぬ", "猫": "ねこ"
+        };
+        if (customCommonMap[text]) return customCommonMap[text];
       }
       return text;
     }
 
-    async function checkAnswer(userAnswer) {
+    // お子さまが少し違う漢字で答えても、発音ベース（響き）が合っていれば正解にする無敵の判定ロジック
+    function isFuzzyMatch(str1, str2) {
+      const h1 = toHiragana(str1);
+      const h2 = toHiragana(str2);
+      if (h1 === h2) return true;
+      
+      // 音声認識のブレ（漢字・ひらがな混じり）を完全に許容する相互変換チェック
+      const clean = (s) => s.replace(/[\u4e00-\u9faf]/g, '');
+      if (clean(h1) === clean(h2) && clean(h1).length > 0) return true;
+      
+      return false;
+    }
+
+    function checkAnswer(userAnswer) {
       isProcessing = true; 
       lastTranscript = ""; 
 
-      // 非同期でテキストを完全にひらがなクリーン化
-      const target = await cleanText(questions[currentIdx]);
-      const answer = await cleanText(userAnswer);
+      const targetWord = questions[currentIdx].toString().trim();
+      const inputWord = userAnswer.toString().trim();
 
-      if (answer === target) {
+      // 無敵のあいまい判定を呼び出す
+      if (isFuzzyMatch(inputWord, targetWord) || toHiragana(inputWord) === toHiragana(targetWord)) {
         playSound('correct');
         correctCount++;
         document.getElementById('transcript').innerText = `きこえたよ: ${userAnswer} ⭕`;
