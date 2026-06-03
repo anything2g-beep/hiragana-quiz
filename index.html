@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <title>ひらがな クイズ</title>
+  <script src="https://cdn.jsdelivr.net/npm/kuroshiro@1.2.0/dist/kuroshiro.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/kuroshiro-analyzer-kuromoji@1.1.0/dist/kuroshiro-analyzer-kuromoji.min.js"></script>
+
   <style>
     body {
       font-family: 'Helvetica Neue', Arial, sans-serif;
@@ -87,7 +90,13 @@
     let isRecording = false;
     let isProcessing = false; 
     let audioCtx = null;
-    let lastTranscript = ""; // 途中で音声ボタンを押された時用のキープ変数
+    let lastTranscript = ""; 
+    
+    // ライブラリの初期化
+    const kuroshiro = new Kuroshiro();
+    let isKuroshiroReady = false;
+    kuroshiro.init(new KuromojiAnalyzer({ dictPath: "https://cdn.jsdelivr.net/npm/kuromoji@0.1.12/dict" }))
+      .then(() => { isKuroshiroReady = true; console.log("Kuroshiro Ready!"); });
 
     function playSound(type) {
       try {
@@ -123,7 +132,6 @@
       if (SpeechRecognition) {
         recognition = new SpeechRecognition();
         recognition.lang = 'ja-JP';
-        // リアルタイムに言葉を追う設定（ボタンをパッと押された時に直前の言葉を拾うため）
         recognition.interimResults = true; 
         recognition.continuous = false; 
         
@@ -133,29 +141,18 @@
           let interimTranscript = '';
           for (let i = event.resultIndex; i < event.results.length; ++i) {
             if (event.results[i].isFinal) {
-              // 音声認識が「喋り終わった」と自動判定した場合
-              const resultText = event.results[i][0].transcript;
-              checkAnswer(resultText);
+              checkAnswer(event.results[i][0].transcript);
               return;
             } else {
               interimTranscript += event.results[i][0].transcript;
             }
           }
-          // 喋っている途中の文字を一時保存しておく
-          if (interimTranscript) {
-            lastTranscript = interimTranscript;
-          }
+          if (interimTranscript) { lastTranscript = interimTranscript; }
         };
-        
         recognition.onerror = () => { stopRecording(); };
-        
-        // 音声認識が（自動または手動で）終了したときの動き
         recognition.onend = () => { 
           stopRecording(); 
-          // もし自動判定されず、かつ手動でボタンが押されて文字が残っていたら、その文字で判定する
-          if (!isProcessing && lastTranscript) {
-            checkAnswer(lastTranscript);
-          }
+          if (!isProcessing && lastTranscript) { checkAnswer(lastTranscript); }
         };
       }
     } catch (e) { console.error(e); }
@@ -195,7 +192,6 @@
     function toggleSpeech() {
       if (!recognition || isProcessing) return;
       if (isRecording) {
-        // ボタンがもう一度押されたら、認識をストップさせてそのまま確定（onend）へ流す
         recognition.stop(); 
       } else {
         isRecording = true;
@@ -222,33 +218,31 @@
       displayQuestion();
     }
 
-    function toHiragana(str) {
-      return str.replace(/[\u30a1-\u30f6]/g, function(match) {
+    // ★どんな日本語（カタカナ・漢字）も100%ひらがなにする無敵の関数
+    async function cleanText(str) {
+      let text = str.toString().trim();
+      
+      // カタカナをひらがなに変換
+      text = text.replace(/[\u30a1-\u30f6]/g, function(match) {
         return String.fromCharCode(match.charCodeAt(0) - 0x60);
-      }).replace(/[\u4e00-\u9faf]/g, function(match) {
-        const kanjiMap = {
-          "店": "みせ", "犬": "いぬ", "猫": "ねこ", "鳥": "とり", "猿": "さる", "牛": "うし", "馬": "うま", "蟹": "かに",
-          "亀": "かめ", "蝦": "えび", "蛸": "たこ", "烏賊": "いか", "熊": "くま", "鹿": "しか", "栗": "くり", "柿": "かき",
-          "桃": "もも", "梨": "なし", "肉": "にく", "魚": "さかな", "卵": "たまご", "車": "くるま", "船": "ふね", "机": "つくえ",
-          "椅子": "いす", "本": "ほん", "傘": "かさ", "服": "ふく", "家": "いえ", "海": "うみ", "山": "やま", "川": "かわ",
-          "池": "いけ", "花": "はな", "草": "くさ", "木": "き", "葉": "は", "空": "そら", "雲": "くも", "雨": "あめ",
-          "雪": "ゆき", "風": "かぜ", "星": "ほし", "月": "つき", "太陽": "たいよう", "朝": "あさ", "昼": "ひる", "夜": "よる",
-          "青": "あお", "赤": "あか", "黄色": "きいろ", "緑": "みどり", "白": "しろ", "黒": "くろ", "手": "て", "足": "あし",
-          "目": "め", "口": "くち", "耳": "みみ", "鼻": "はな", "髪": "かみ", "指": "ゆび", "学校": "がっこう", "病院": "びょういん",
-          "公園": "こうえん", "駅": "えき", "風船": "ふうせん", "花火": "はなび", "祭り": "まつり", "太鼓": "たいこ", "歌": "うた",
-          "蜂": "はち", "蜘蛛": "くも", "蛙": "かえる", "金魚": "きんぎょ", "鯨": "くじら", "羊": "ひつじ", "豚": "ぶた",
-          "燕": "つばめ", "烏": "からす", "雀": "すずめ", "鳩": "はと", "蝉": "せみ", "向日葵": "ひまわり", "桜": "さくら", "梅": "うめ"
-        };
-        return kanjiMap[match] || match;
       });
+
+      // 漢字が混ざっている場合、AI辞書ライブラリでひらがなに変換
+      if (isKuroshiroReady && /[\u4e00-\u9faf]/.test(text)) {
+        try {
+          text = await kuroshiro.convert(text, { to: "hiragana" });
+        } catch(e) { console.error("変換エラー:", e); }
+      }
+      return text;
     }
 
-    function checkAnswer(userAnswer) {
+    async function checkAnswer(userAnswer) {
       isProcessing = true; 
-      lastTranscript = ""; // 判定に入るのでリセット
+      lastTranscript = ""; 
 
-      const target = toHiragana(questions[currentIdx].toString().trim());
-      const answer = toHiragana(userAnswer.toString().trim());
+      // 非同期でテキストを完全にひらがなクリーン化
+      const target = await cleanText(questions[currentIdx]);
+      const answer = await cleanText(userAnswer);
 
       if (answer === target) {
         playSound('correct');
@@ -283,7 +277,6 @@
       setTimeout(() => { effectDiv.style.display = 'none'; callback(); }, 1200);
     }
 
-    // タイマー
     function startTimer() {
       document.getElementById('timer').innerText = `0 びょう`;
       timerInterval = setInterval(() => { secondsElapsed++; document.getElementById('timer').innerText = `${secondsElapsed} びょう`; }, 1000);
