@@ -12,7 +12,7 @@
       display: flex; flex-direction: column; align-items: center; justify-content: center;
       min-height: 100vh; color: #333; box-sizing: border-box;
       transition: background-color 0.3s;
-      overflow: hidden; /* 紙吹雪のはみ出し防止 */
+      overflow: hidden;
     }
     
     body.correct-flash { background-color: #e8f5e9; }
@@ -49,11 +49,9 @@
     .effect { font-size: 9rem; position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%) scale(0); display: none; z-index: 10; pointer-events: none; opacity: 0; transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
     .effect.show { display: block; opacity: 1; transform: translate(-50%, -50%) scale(1.3); }
     
-    /* 🏆 新しいクリア画面用リッチデザイン */
     .trophy-display { font-size: 6.5rem; margin-bottom: 10px; animation: popIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
     .score-title { font-size: 2.4rem; font-weight: bold; color: #ff9800; margin-bottom: 15px; text-shadow: 1px 1px 3px rgba(0,0,0,0.1); }
     .score-time { font-size: 1.6rem; font-weight: bold; color: #37474f; margin-bottom: 35px; background: white; padding: 12px 20px; border-radius: 20px; display: inline-block; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
-    .crown-icon { font-size: 1.8rem; vertical-align: middle; margin-right: 5px; }
     
     @keyframes pulse { 0% { transform: scale(1); box-shadow: 0 6px 12px rgba(233, 30, 99, 0.4); } 50% { transform: scale(1.12); box-shadow: 0 6px 25px rgba(233, 30, 99, 0.7); } 100% { transform: scale(1); box-shadow: 0 6px 12px rgba(233, 30, 99, 0.4); } }
     @keyframes shake { 0%, 100% { transform: translateX(0); } 15%, 45%, 75% { transform: translateX(-10px); } 30%, 60%, 90% { transform: translateX(10px); } }
@@ -74,7 +72,7 @@
   <div id="page-main" class="page">
     <div class="status-bar">
       <div class="status-left">
-        <div id="question-count">せいかい 0 / 10</div>
+        <div id="question-count">せいかい 0 / 5</div>
         <div id="timer">0 びょう</div>
       </div>
       <button class="btn-skip" onclick="skipQuestion()">つぎへ (ぱす)</button>
@@ -89,7 +87,7 @@
     <div class="trophy-display">🏆</div>
     <div class="score-title">ぜんもん クリア！</div>
     <div class="score-time" id="final-time">
-      <span id="crown-place" class="crown-icon"></span>かかったじかん: <span id="time-place">--</span> びょう
+      かかったじかん: <span id="time-place">--</span> びょう
     </div>
     <button class="btn btn-easy" onclick="backToTitle()">もういちど あそぶ</button>
   </div>
@@ -107,7 +105,7 @@
     let isProcessing = false; 
     let audioCtx = null;
     let lastTranscript = ""; 
-    let confettiInterval = null; // 紙吹雪ループ用
+    let confettiInterval = null; 
 
     function playSound(type) {
       try {
@@ -196,7 +194,8 @@
         endGame();
         return;
       }
-      document.getElementById('question-count').innerText = `せいかい ${correctCount} / 10`;
+      // ★5問ゴールに変更
+      document.getElementById('question-count').innerText = `せいかい ${correctCount} / 5`;
       document.getElementById('word-display').innerText = questions[0].question; 
       document.getElementById('transcript').innerText = "";
       lastTranscript = "";
@@ -261,7 +260,8 @@
         
         showEffect('⭕', '#4caf50', () => {
           document.body.classList.remove('correct-flash');
-          if (correctCount < 10) {
+          // ★5問でクリア画面へ進む判定に修正
+          if (correctCount < 5) {
             questions.shift(); 
             displayQuestion();
           } else {
@@ -303,33 +303,17 @@
     }
     function stopTimer() { clearInterval(timerInterval); }
     
-    // 🏆 クリア画面の華やかな演出処理
     function endGame() {
       stopTimer();
       showPage('page-main', false);
       
-      // タイムに応じて王冠のランクを変える
-      const crownPlace = document.getElementById('crown-place');
-      if (secondsElapsed < 45) {
-        crownPlace.innerText = "👑 (きん) ";
-        crownPlace.style.color = "#ffd700";
-      } else if (secondsElapsed < 90) {
-        crownPlace.innerText = "👑 (ぎん) ";
-        crownPlace.style.color = "#c0c0c0";
-      } else {
-        crownPlace.innerText = "👑 (どう) ";
-        crownPlace.style.color = "#cd7f32";
-      }
-      
       document.getElementById('time-place').innerText = secondsElapsed;
       showPage('page-score', true);
       
-      // 🎉 パラパラと何度も弾ける豪華な紙吹雪スタート！
+      // 🎉 お祝いのド派手な紙吹雪演出はそのままキープ！
       if (typeof confetti === 'function') {
-        // 最初の一発ドカン！
         confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
         
-        // その後、3秒間左右から交互に打ち上げるループ
         let duration = 3 * 1000;
         let end = Date.now() + duration;
 
